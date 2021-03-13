@@ -116,6 +116,14 @@ def execution_status(execution_id):
         print(f'Exception - {e}')
         return dict(response=f'Error during execution - {e}'), 500
 
+@app.route("/reachengine/api/workflows/metadata/<dcl_id>", methods=["POST"])
+def log_metadata():
+    if request.method != 'POST':
+        return '', 511
+    print("\n\n---- Request data ----\n")
+    print(f"{str(request.data, 'utf-8', 'ignore')}\n")
+    return "", 200
+
 @app.route('/<path:path>', methods=HTTP_METHODS)
 def fallback(path=None):
     return '', 511
