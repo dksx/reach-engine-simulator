@@ -4,6 +4,8 @@ import uuid
 import boto3.session as s3session
 from botocore.exceptions import ClientError
 from flask import Flask, request
+from uwsgidecorators import *
+import datetime as dt
 import csv
 import json
 import random
@@ -18,13 +20,15 @@ with open('dcl.csv', 'r') as csvfile:
     for i in data:
         hashmap_[i[1]] = i[4]
 
+t_abort = dict(timeout=90)
+
 app = Flask(__name__)
 
 
-#@cron(-1, -1, -1, -1, -1)
-#def run_periodic_task(num):
-#    x = dt.datetime.now()
-#    print(x.strftime("%X"))
+@cron(-10, -1, -1, -1, -1)
+def run_periodic_task(num):
+    x = dt.datetime.now()
+    print(x.strftime("%X"))
 
 def upload_file(file_):
     file_name = 'strand.mp4'
@@ -91,16 +95,17 @@ def reach_engine_restore(workflow_id):
         payload = json.loads(str(request.data, 'utf-8', 'ignore'))
         print(str(request.data, 'utf-8', 'ignore'))
         dcl_id = payload["subject"].split(".")[1]
+
         filename = hashmap_.get(dcl_id)
         if filename is not None:
             if payload["exportFormat"] == "source":
                 uuid_ = payload["arvatoUuid"]
                 if(uuid_ and uuid_.strip()):
-                    print(f"{uuid_}_{filename}")
+                    upload_file(f"{uuid_}_{filename}")
                 else:
-                    print(f"{filename}")
+                    upload_file(f"{filename}")
             else:
-                print(f"{filename}.mp4")
+                upload_file(f"{filename}.mp4")
             workflow_execution_id = str(uuid.uuid4()).split('-')[-1]
             response = dict(workflowId=workflow_id, ArchiveId=dcl_id, Id=workflow_execution_id,
                                 ExecutionStatus="EXECUTING", ErrorMessage="", PercentComplete="10")
@@ -120,24 +125,41 @@ def execution_status(execution_id):
     if request.method != 'GET':
         return '', 511
     try:
-        recount_ = random.randint(1, 4)
-        if recount_ > 1:
-            response = dict(Id=execution_id, Status="EXECUTING", ErrorMessage="", PercentComplete="10")
-            return response, 200
-        else:
-            response = dict(Id=execution_id, Status="COMPLETED", ErrorMessage="", PercentComplete="100")
-            return response, 200
+        if execution_id in t_abort:
+            time_ = t_abort[execution_id]
+            if dt.datetime.utcnow() >= time_:
+                response = dict(Id=execution_id, Status="COMPLETED", ErrorMessage="", PercentComplete="100")
+                del t_abort[execution_id]
+                return response, 200
+            else:
+                response = dict(Id=execution_id, Status="EXECUTING", ErrorMessage="", PercentComplete="40")
+                return response, 200
+        t_abort[execution_id] = dt.datetime.utcnow() + dt.timedelta(seconds=t_abort['timeout'])
+        response = dict(Id=execution_id, Status="EXECUTING", ErrorMessage="", PercentComplete="20")
+        return response, 200
     except Exception as e:
         print(f'Exception - {e}')
         return dict(response=f'Error during execution - {e}'), 500
 
-@app.route("/reachengine/api/workflows/metadata/<dcl_id>", methods=["POST"])
+@app.route("/reachengine/api/metadata/<dcl_id>", methods=["PUT"])
 def log_metadata(dcl_id):
-    if request.method != 'POST':
+    if request.method != 'PUT':
         return '', 511
     print("\n\n---- Request data ----\n")
     print(f"{str(request.data, 'utf-8', 'ignore')}\n")
     return "", 200
+
+@app.route("/reachengine/set-timeout/<seconds>", methods=["PUT"])
+def set_timeout(seconds):
+    if request.method != 'PUT':
+        return '', 511
+    try:
+        delay = int(seconds)
+        t_abort['timeout'] = delay
+        print(t_abort['timeout'])
+        return t_abort['timeout'], 200
+    except Exception as e:
+        return f"{e}", 400
 
 @app.route('/<path:path>', methods=HTTP_METHODS)
 def fallback(path=None):
