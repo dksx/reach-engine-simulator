@@ -20,6 +20,12 @@ with open('dcl.csv', 'r') as csvfile:
 
 app = Flask(__name__)
 
+
+#@cron(-1, -1, -1, -1, -1)
+#def run_periodic_task(num):
+#    x = dt.datetime.now()
+#    print(x.strftime("%X"))
+
 def upload_file(file_):
     file_name = 'strand.mp4'
     object_ = 'reach_engine'
@@ -66,10 +72,11 @@ def reach_engine_archive(workflow_id):
     if request.method != 'POST':
         return '', 511
     try:
+        print(f"{str(request.data, 'utf-8', 'ignore')}\n")
         uuid_ = str(uuid.uuid4())
         workflow_execution_id = uuid_.split('-')[-1]
         dcl_id = uuid_.split('-')[0]
-        response = dict(workflowId=workflow_id, ArchiveId=dcl_id, Id=workflow_execution_id, 
+        response = dict(workflowId=workflow_id, ArchiveId=dcl_id, Id=workflow_execution_id,
                             ExecutionStatus="EXECUTING", ErrorMessage="", PercentComplete="10")
         return response, 200
     except Exception as e:
@@ -86,16 +93,24 @@ def reach_engine_restore(workflow_id):
         dcl_id = payload["subject"].split(".")[1]
         filename = hashmap_.get(dcl_id)
         if filename is not None:
-            uuid_ = payload["guid"]
-            upload_file(f"{uuid_}_{filename}")
+            if payload["exportFormat"] == "source":
+                uuid_ = payload["arvatoUuid"]
+                if(uuid_ and uuid_.strip()):
+                    print(f"{uuid_}_{filename}")
+                else:
+                    print(f"{filename}")
+            else:
+                print(f"{filename}.mp4")
             workflow_execution_id = str(uuid.uuid4()).split('-')[-1]
-            response = dict(workflowId=workflow_id, ArchiveId=dcl_id, Id=workflow_execution_id, 
+            response = dict(workflowId=workflow_id, ArchiveId=dcl_id, Id=workflow_execution_id,
                                 ExecutionStatus="EXECUTING", ErrorMessage="", PercentComplete="10")
             return response, 200
         else:
-            uuid_ = uuid.uuid4().hex
-            upload_file(f"{uuid_}")
-            return dict(response=f'Uploaded {uuid_}, workflow ID {workflow_id}'), 200
+            upload_file(f"Reach_Engine_Error.ogx")
+            workflow_execution_id = str(uuid.uuid4()).split('-')[-1]
+            response = dict(workflowId=workflow_id, ArchiveId=dcl_id, Id=workflow_execution_id,
+                                ExecutionStatus="EXECUTING", ErrorMessage="", PercentComplete="10")
+            return response, 200
     except Exception as e:
         print(f'Exception - {e}')
         return dict(response=f'Error during execution - {e}'), 500
@@ -117,7 +132,7 @@ def execution_status(execution_id):
         return dict(response=f'Error during execution - {e}'), 500
 
 @app.route("/reachengine/api/workflows/metadata/<dcl_id>", methods=["POST"])
-def log_metadata():
+def log_metadata(dcl_id):
     if request.method != 'POST':
         return '', 511
     print("\n\n---- Request data ----\n")
@@ -127,6 +142,7 @@ def log_metadata():
 @app.route('/<path:path>', methods=HTTP_METHODS)
 def fallback(path=None):
     return '', 511
+
 
 #if __name__ == "__main__":
 #    app.run(debug=True, host='0.0.0.0', port=8080)
