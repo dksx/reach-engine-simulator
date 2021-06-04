@@ -162,9 +162,9 @@ def execution_status(execution_id):
         print(f'Exception - {e}')
         return dict(response=f'Error during execution - {e}'), 500
 
-@app.route("/reachengine/api/metadata/<dcl_id>", methods=["PUT"])
-def log_metadata(dcl_id):
-    if request.method != 'PUT':
+@app.route("/reachengine/api/workflows/arvatoUpdateAssetMetadata/run", methods=["POST"])
+def log_metadata():
+    if request.method != 'POST':
         return '', 511
     print("\n\n---- Request data ----\n")
     print(f"{str(request.data, 'utf-8', 'ignore')}\n")
